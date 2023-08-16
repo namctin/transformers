@@ -362,6 +362,7 @@ _import_structure = {
     "models.ibert": ["IBERT_PRETRAINED_CONFIG_ARCHIVE_MAP", "IBertConfig"],
     "models.imagegpt": ["IMAGEGPT_PRETRAINED_CONFIG_ARCHIVE_MAP", "ImageGPTConfig"],
     "models.informer": ["INFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP", "InformerConfig"],
+    "models.patchtst": ["PATCHTST_PRETRAINED_CONFIG_ARCHIVE_MAP", "PatchTSTConfig"],
     "models.instructblip": [
         "INSTRUCTBLIP_PRETRAINED_CONFIG_ARCHIVE_MAP",
         "InstructBlipConfig",
@@ -1938,6 +1939,13 @@ else:
             "InformerForPrediction",
             "InformerModel",
             "InformerPreTrainedModel",
+        ]
+    )
+    _import_structure["models.patchtst"].extend(
+        [
+            "PATCHTST_PRETRAINED_MODEL_ARCHIVE_LIST",
+            "PatchTSTModel",
+            "PatchTSTPreTrainedModel",
         ]
     )
     _import_structure["models.instructblip"].extend(
@@ -4356,6 +4364,7 @@ if TYPE_CHECKING:
     from .models.ibert import IBERT_PRETRAINED_CONFIG_ARCHIVE_MAP, IBertConfig
     from .models.imagegpt import IMAGEGPT_PRETRAINED_CONFIG_ARCHIVE_MAP, ImageGPTConfig
     from .models.informer import INFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP, InformerConfig
+    from .models.patchtst import PATCHTST_PRETRAINED_CONFIG_ARCHIVE_MAP, PatchTSTConfig
     from .models.instructblip import (
         INSTRUCTBLIP_PRETRAINED_CONFIG_ARCHIVE_MAP,
         InstructBlipConfig,
@@ -5701,6 +5710,11 @@ if TYPE_CHECKING:
             InformerForPrediction,
             InformerModel,
             InformerPreTrainedModel,
+        )
+        from .models.patchtst import (
+            PATCHTST_PRETRAINED_MODEL_ARCHIVE_LIST,
+            PatchTSTModel,
+            PatchTSTPreTrainedModel,
         )
         from .models.instructblip import (
             INSTRUCTBLIP_PRETRAINED_MODEL_ARCHIVE_LIST,

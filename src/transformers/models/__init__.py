@@ -103,6 +103,7 @@ from . import (
     ibert,
     imagegpt,
     informer,
+    patchtst,
     instructblip,
     jukebox,
     layoutlm,
