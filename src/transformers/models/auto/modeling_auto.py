@@ -108,7 +108,6 @@ MODEL_MAPPING_NAMES = OrderedDict(
         ("ibert", "IBertModel"),
         ("imagegpt", "ImageGPTModel"),
         ("informer", "InformerModel"),
-        ("patchtst", "PatchTSTModel"),
         ("jukebox", "JukeboxModel"),
         ("layoutlm", "LayoutLMModel"),
         ("layoutlmv2", "LayoutLMv2Model"),
