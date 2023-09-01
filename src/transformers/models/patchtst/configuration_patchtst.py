@@ -42,7 +42,7 @@ class PatchTSTConfig(PretrainedConfig):
         context_length (`int`, *optional*, defaults to `prediction_length`):
             The context length for the encoder. If `None`, the context length will be the same as the
             `prediction_length`.
-        input_size (`int`, *optional*, defaults to 1):
+        num_input_channels (`int`, *optional*, defaults to 1):
             The size of the target variable which by default is 1 for univariate targets. Would be > 1 in case of
             multivariate targets.
         num_time_features (`int`, *optional*, defaults to 0):
@@ -122,7 +122,7 @@ class PatchTSTConfig(PretrainedConfig):
 
     def __init__(
         self,
-        input_size: int = 1,
+        num_input_channels: int = 1,
         context_length: int = 32,
         patch_length: int = 8,
         stride: int = 8,
@@ -170,8 +170,8 @@ class PatchTSTConfig(PretrainedConfig):
         is_encoder_decoder: bool = False,
         encoder_layerdrop: float = 0.1,
         prediction_length: int = 24,
-        prediction_range: List[int] = [0, 1],
-        target_dimension: int = 1,
+        prediction_range: List = [0, 1],
+        num_output_channels: int = 1,
         # PatchTST arguments
         attention_type: str = "prob",
         sampling_factor: int = 5,
@@ -180,7 +180,7 @@ class PatchTSTConfig(PretrainedConfig):
     ):
         # time series specific configuration
         self.context_length = context_length
-        self.input_size = input_size  # n_vars
+        self.num_input_channels = num_input_channels  # n_vars
         self.num_time_features = num_time_features
         self.num_dynamic_real_features = num_dynamic_real_features
         self.num_static_real_features = num_static_real_features
@@ -244,7 +244,7 @@ class PatchTSTConfig(PretrainedConfig):
         self.prediction_length = prediction_length
 
         # Regression
-        self.target_dimension = target_dimension
+        self.num_output_channels = num_output_channels
         self.prediction_range = prediction_range
 
         super().__init__(is_encoder_decoder=is_encoder_decoder, **kwargs)

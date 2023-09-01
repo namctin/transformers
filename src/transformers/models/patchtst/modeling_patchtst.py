@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 TSFM team. All rights reserved.
+# Copyright 2023 Amazon and The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -225,10 +225,11 @@ class Patchify(nn.Module):
     """
     Args:
     A class to patchify the time series sequence into different patches
-        sequence_length (int, required): input sequence length patch_length (int, required): patch length stride (int,
-        required): stride between patches
+        sequence_length (int, required): input sequence length
+        patch_length (int, required): patch length
+        stride (int, required): stride between patches
     Returns:
-        z: output tensor data [bs x n_vars x num_patches x patch_length]
+        z: output tensor data [bs x num_input_channels x num_patches x patch_length]
     """
 
     def __init__(
@@ -256,9 +257,9 @@ class Patchify(nn.Module):
     def forward(self, past_values: torch.Tensor):
         """
         Args:
-            past_values (torch.Tensor, required): Input of shape [bs x sequence_length x n_vars]
+            past_values (torch.Tensor, required): Input of shape [bs x sequence_length x num_input_channels]
         Returns:
-            x: output tensor data [bs x n_vars x num_patches x patch_length]
+            x: output tensor data [bs x num_input_channels x num_patches x patch_length]
         """
         sequence_length = past_values.shape[-2]
         assert (
@@ -268,8 +269,8 @@ class Patchify(nn.Module):
         x = past_values[:, self.s_begin :, :]  # x: [bs x new_sequence_length x nvars]
         x = x.unfold(
             dimension=-2, size=self.patch_length, step=self.stride
-        )  # x: [bs x num_patches x n_vars x patch_length]
-        x = x.transpose(-2, -3).contiguous()  # xb: [bs x n_vars x num_patches x patch_length]
+        )  # x: [bs x num_patches x num_input_channels x patch_length]
+        x = x.transpose(-2, -3).contiguous()  # xb: [bs x num_input_channels x num_patches x patch_length]
         return x
 
 
@@ -277,10 +278,11 @@ class PatchEmbeddings(nn.Module):
     """
     Args:
     A class to patchify the time series sequence into different patches
-        sequence_length (int, required): input sequence length patch_length (int, required): patch length stride (int,
-        required): stride between patches
+        sequence_length (int, required): input sequence length
+        patch_length (int, required): patch length
+        stride (int, required): stride between patches
     Returns:
-        embeddings: output tensor data [bs x n_vars x num_patches x embed_dim]
+        embeddings: output tensor data [bs x num_input_channels x num_patches x embed_dim]
     """
 
     def __init__(self, sequence_length: int, patch_length: int, stride: int, embed_dim: int):
@@ -313,24 +315,24 @@ class PatchEmbeddings(nn.Module):
     def forward(self, past_values: torch.Tensor):
         """
         Args:
-            past_values (torch.Tensor, required): Input of shape [bs x sequence_length x n_vars]
+            past_values (torch.Tensor, required): Input of shape [bs x sequence_length x num_input_channels]
         Returns:
-            embeddings: output tensor data [bs x n_vars x num_patches x emb_dim]
+            embeddings: output tensor data [bs x num_input_channels x num_patches x emb_dim]
         """
-        bs, sequence_length, n_vars = past_values.shape
+        bs, sequence_length, num_input_channels = past_values.shape
         assert (
             sequence_length == self.sequence_length
         ), f"Input sequence length ({sequence_length}) doesn't match the configuration sequence length ({self.sequence_length})."
 
         x = past_values[:, self.s_begin :, :]  # x: [bs x new_sequence_length x nvars]
-        # convert past_values to shape [bs*n_vars x 1 x sequence_length ]
-        x = x.transpose(1, 2).reshape(bs * n_vars, 1, -1).contiguous()
+        # convert past_values to shape [bs*num_input_channels x 1 x sequence_length ]
+        x = x.transpose(1, 2).reshape(bs * num_input_channels, 1, -1).contiguous()
         # projection
-        embeddings = self.projection(x)  # embeddings: [bs*n_vars x emb_dim x num_patches]
+        embeddings = self.projection(x)  # embeddings: [bs*num_input_channels x emb_dim x num_patches]
         # reshape
         embeddings = (
-            embeddings.transpose(1, 2).view(bs, n_vars, -1, self.embed_dim).contiguous()
-        )  # embeddings: [bs x n_vars x num_patches x emb_dim]
+            embeddings.transpose(1, 2).view(bs, num_input_channels, -1, self.embed_dim).contiguous()
+        )  # embeddings: [bs x num_input_channels x num_patches x emb_dim]
         # embeddings = embeddings.flatten(2).transpose(1, 2)
         return embeddings
 
@@ -384,13 +386,13 @@ class PatchMasking(nn.Module):
         """
         Input:
             x: patched input
-                4D: [bs x n_vars x num_patches x patch_length]
+                4D: [bs x num_input_channels x num_patches x patch_length]
 
         Output:
             x_mask: Masked patched input
-                4D: [bs x n_vars x num_patches x patch_length]
+                4D: [bs x num_input_channels x num_patches x patch_length]
             mask: bool tensor indicating True on masked points
-                4D: [bs x n_vars x num_patch]
+                4D: [bs x num_input_channels x num_patch]
         """
 
         if self.mask_type == "random":
@@ -406,7 +408,7 @@ class PatchMasking(nn.Module):
         else:
             raise Exception("Invalid mask type")
 
-        mask = mask.bool()  # mask: [bs x n_vars x num_patch]
+        mask = mask.bool()  # mask: [bs x num_input_channels x num_patch]
 
         return x_mask, mask
 
@@ -476,10 +478,12 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
         src: tensor [bs x nvars x sequence_length x d_model] Return:
             Tensor [bs x nvars x sequence_length x d_model]
         """
-        bs, n_vars, sequence_length, d_model = src.shape
+        bs, num_input_channels, sequence_length, d_model = src.shape
 
         # First sublayer: attention across time
-        src = src.view(bs * n_vars, sequence_length, d_model)  # src: [(bs*nvars) x sequence_length x d_model]
+        src = src.view(
+            bs * num_input_channels, sequence_length, d_model
+        )  # src: [(bs*nvars) x sequence_length x d_model]
         if self.pre_norm:
             ## Norm and Multi-Head attention and Add residual connection
             src = src + self.dropout_path1(
@@ -490,12 +494,12 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
             src = self.norm_sublayer1(
                 src + self.dropout_path1(self.self_attn(src))
             )  # src: [(bs*nvars) x sequence_length x d_model]
-        src = src.reshape(bs, n_vars, sequence_length, d_model)  # [bs x nvars x sequence_length x d_model]
+        src = src.reshape(bs, num_input_channels, sequence_length, d_model)  # [bs x nvars x sequence_length x d_model]
 
         # second sublayer: attention across variable at any given time
         # [bs x nvars x sequence_length x d_model] -> [bs x sequence_length x nvars x d_model] -> [(bs*sequence_length) x nvars x d_model]
         src = (
-            src.transpose(2, 1).contiguous().view(bs * sequence_length, n_vars, d_model)
+            src.transpose(2, 1).contiguous().view(bs * sequence_length, num_input_channels, d_model)
         )  # [(bs*sequence_length) x nvars x d_model]
         if self.pre_norm:
             ## Norm and Multi-Head attention and Add residual connection
@@ -508,11 +512,13 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
                 src + self.dropout_path2(self.self_attn(src))
             )  # src: [(bs*sequence_length) x nvars x d_model]
         src = (
-            src.reshape(bs, sequence_length, n_vars, d_model).transpose(1, 2).contiguous()
+            src.reshape(bs, sequence_length, num_input_channels, d_model).transpose(1, 2).contiguous()
         )  # src: [bs x nvars x sequence_length x d_model]
 
         # Third sublayer: mixing across hidden
-        src = src.view(bs * n_vars, sequence_length, d_model)  # src: [(bs*nvars) x sequence_length x d_model]
+        src = src.view(
+            bs * num_input_channels, sequence_length, d_model
+        )  # src: [(bs*nvars) x sequence_length x d_model]
         if self.pre_norm:
             ## Norm and Position-wise Feed-Forward and Add residual connection
             src = src + self.dropout_path3(
@@ -523,7 +529,7 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
             src = self.norm_sublayer3(
                 src + self.dropout_path3(self.ff(src))
             )  # Add: residual connection with residual dropout
-        src = src.reshape(bs, n_vars, sequence_length, d_model)  # [bs x nvars x sequence_length x d_model]
+        src = src.reshape(bs, num_input_channels, sequence_length, d_model)  # [bs x nvars x sequence_length x d_model]
 
         return src
 
@@ -558,7 +564,7 @@ class PatchTSTPreTrainedModel(PreTrainedModel):
 class ChannelAttentionPatchTSTEncoder(PatchTSTPreTrainedModel):
     def __init__(self, config: PatchTSTConfig):
         super().__init__(config)
-        self.n_vars = config.input_size
+        self.num_input_channels = config.num_input_channels
         self.num_patches = config.num_patches
         self.patch_length = config.patch_length
         self.d_model = config.d_model
@@ -569,7 +575,7 @@ class ChannelAttentionPatchTSTEncoder(PatchTSTPreTrainedModel):
         # Input encoding: projection of feature vectors onto a d-dim vector space
         if not config.shared_embedding:
             self.w_p = nn.ModuleList()
-            for _ in range(self.n_vars):
+            for _ in range(self.num_input_channels):
                 self.w_p.append(nn.Linear(config.patch_length, config.d_model))
         else:
             self.w_p = nn.Linear(config.patch_length, config.d_model)
@@ -603,13 +609,14 @@ class ChannelAttentionPatchTSTEncoder(PatchTSTPreTrainedModel):
         self, past_values: torch.Tensor, output_hidden_states: Optional[bool] = None
     ) -> BaseModelOutputWithNoAttention:
         """
-        past_values: tensor [bs x nvars x num_patches x patch_length] output_hidden_states (bool, optional): Boolean
-        indicating if hidden states should be outtput return:
+        past_values: tensor [bs x nvars x num_patches x patch_length] output_hidden_states (bool, optional): Indicates
+        if hidden states should be outtput return:
+
             tensor [bs x nvars x num_patches x d_model]
                 or [bs x nvars x (num_patches+1) x d_model] if use cls_token
         """
-        # bs, num_patches, n_vars, patch_length = x.shape
-        bs, n_vars, num_patches, patch_length = past_values.shape
+        # bs, num_patches, num_input_channels, patch_length = x.shape
+        bs, num_input_channels, num_patches, patch_length = past_values.shape
 
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -617,7 +624,7 @@ class ChannelAttentionPatchTSTEncoder(PatchTSTPreTrainedModel):
         # Input encoding
         if not self.shared_embedding:
             x_out = []
-            for i in range(n_vars):
+            for i in range(num_input_channels):
                 z = self.w_p[i](past_values[:, i, :, :])
                 x_out.append(z)
             past_values = torch.stack(x_out, dim=1)
@@ -661,7 +668,7 @@ PATCHTST_START_DOCSTRING = r"""
 
 PATCHTST_INPUTS_DOCSTRING = r"""
     Args:
-        past_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)` or `(batch_size, sequence_length, input_size)`):
+        past_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)` or `(batch_size, sequence_length, num_input_channels)`):
             Past values of the time series, that serve as context in order to predict the future. The sequence size of
             this tensor must be larger than the `context_length` of the model, since the model will use the larger size
             to construct lag features, i.e. additional values from the past which are added in order to serve as "extra
@@ -677,8 +684,8 @@ PATCHTST_INPUTS_DOCSTRING = r"""
 
             Optionally, missing values need to be replaced with zeros and indicated via the `past_observed_mask`.
 
-            For multivariate time series, the `input_size` > 1 dimension is required and corresponds to the number of
-            variates in the time series per time step.
+            For multivariate time series, the `num_input_channels` > 1 dimension is required and corresponds to the
+            number of variates in the time series per time step.
         past_time_features (`torch.FloatTensor` of shape `(batch_size, sequence_length, num_features)`):
             Required time features, which the model internally will add to `past_values`. These could be things like
             "month of year", "day of the month", etc. encoded as vectors (for instance as Fourier features). These
@@ -695,7 +702,7 @@ PATCHTST_INPUTS_DOCSTRING = r"""
             must but known at prediction time.
 
             The `num_features` here is equal to `config.`num_time_features` + `config.num_dynamic_real_features`.
-        past_observed_mask (`torch.BoolTensor` of shape `(batch_size, sequence_length)` or `(batch_size, sequence_length, input_size)`, *optional*):
+        past_observed_mask (`torch.BoolTensor` of shape `(batch_size, sequence_length)` or `(batch_size, sequence_length, num_input_channels)`, *optional*):
             Boolean mask to indicate which `past_values` were observed and which were missing. Mask values selected in
             `[0, 1]`:
 
@@ -715,7 +722,7 @@ PATCHTST_INPUTS_DOCSTRING = r"""
             Static real features are features which have the same value for all time steps (static over time).
 
             A typical example of a static real feature is promotion information.
-        future_values (`torch.FloatTensor` of shape `(batch_size, prediction_length)` or `(batch_size, prediction_length, input_size)`, *optional*):
+        future_values (`torch.FloatTensor` of shape `(batch_size, prediction_length)` or `(batch_size, prediction_length, num_input_channels)`, *optional*):
             Future values of the time series, that serve as labels for the model. The `future_values` is what the
             Transformer needs during training to learn to output, given the `past_values`.
 
@@ -726,8 +733,8 @@ PATCHTST_INPUTS_DOCSTRING = r"""
             Optionally, during training any missing values need to be replaced with zeros and indicated via the
             `future_observed_mask`.
 
-            For multivariate time series, the `input_size` > 1 dimension is required and corresponds to the number of
-            variates in the time series per time step.
+            For multivariate time series, the `num_input_channels` > 1 dimension is required and corresponds to the
+            number of variates in the time series per time step.
         future_time_features (`torch.FloatTensor` of shape `(batch_size, prediction_length, num_features)`):
             Required time features for the prediction window, which the model internally will add to `future_values`.
             These could be things like "month of year", "day of the month", etc. encoded as vectors (for instance as
@@ -745,7 +752,7 @@ PATCHTST_INPUTS_DOCSTRING = r"""
             must but known at prediction time.
 
             The `num_features` here is equal to `config.`num_time_features` + `config.num_dynamic_real_features`.
-        future_observed_mask (`torch.BoolTensor` of shape `(batch_size, sequence_length)` or `(batch_size, sequence_length, input_size)`, *optional*):
+        future_observed_mask (`torch.BoolTensor` of shape `(batch_size, sequence_length)` or `(batch_size, sequence_length, num_input_channels)`, *optional*):
             Boolean mask to indicate which `future_values` were observed and which were missing. Mask values selected
             in `[0, 1]`:
 
@@ -850,9 +857,9 @@ class PatchTSTModelOutputWithNoAttention(ModelOutput):
 class RevIN(nn.Module):
     def __init__(self, start_dim=1, eps=1e-5, denorm_channels: list = None):
         """
-        :param start_dim: it is 1 if [bs x seq_len x nvars], it is 3 is [bs x tsg1 x tsg2 x seq_len x n_vars]
-        :denorm_channels if the denorm input shape has less number of channels, mention the channels in the denorm
-        input here.
+        :param start_dim: it is 1 if [bs x seq_len x nvars], it is 3 is [bs x tsg1 x tsg2 x seq_len x
+        num_input_channels] :denorm_channels if the denorm input shape has less number of channels, mention the
+        channels in the denorm input here.
         """
         super(RevIN, self).__init__()
         self.stdev = None
@@ -900,6 +907,7 @@ class RevIN(nn.Module):
         return x
 
 
+# Copied from transformers.models.time_series_transformer.modeling_time_series_transformer.TimeSeriesTransformerModel with TimeSeriesTransformer->PatchTST,TIME_SERIES_TRANSFORMER->PATCHTST,time-series-transformer->patchtst,TimeSeries->PatchTST
 class PatchTSTModel(PatchTSTPreTrainedModel):
     def __init__(self, config: PatchTSTConfig):
         super().__init__(config)
@@ -949,7 +957,7 @@ class PatchTSTModel(PatchTSTPreTrainedModel):
 
         patched_values = self.patching(
             past_values
-        )  # patched_values: [bs x n_vars x num_patches x patch_length] for pretrain
+        )  # patched_values: [bs x num_input_channels x num_patches x patch_length] for pretrain
         if self.mask_input:
             masked_values, mask = self.masking(patched_values)
         else:
@@ -1032,7 +1040,7 @@ class PatchTSTForMaskPretraining(PatchTSTPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
     ) -> PatchTSTOutput:
         """
-        past_values (x): tensor [bs x sequence_length x n_vars ] future_values (y): labels
+        past_values (x): tensor [bs x sequence_length x num_input_channels ] future_values (y): labels
         """
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -1094,7 +1102,7 @@ class ClassificationHead(nn.Module):
         self.pooling = config.pooling
         self.flatten = nn.Flatten(start_dim=1)
         self.dropout = nn.Dropout(config.head_dropout) if config.head_dropout > 0 else nn.Identity()
-        self.linear = nn.Linear(config.input_size * config.d_model, config.num_classes)
+        self.linear = nn.Linear(config.num_input_channels * config.d_model, config.num_classes)
 
     def forward(self, x):
         """
@@ -1148,21 +1156,21 @@ class PredictionHead(nn.Module):
     def __init__(self, config: PatchTSTConfig):
         super().__init__()
 
-        self.target_dimension = config.target_dimension
+        self.num_output_channels = config.num_output_channels
         self.use_cls_token = config.use_cls_token
         self.pooling = config.pooling
 
-        head_dim = config.input_size * config.d_model
+        head_dim = config.num_input_channels * config.d_model
 
         self.flatten = nn.Flatten(start_dim=1)
-        self.linear = nn.Linear(head_dim, config.prediction_length * config.target_dimension)
+        self.linear = nn.Linear(head_dim, config.prediction_length * config.num_output_channels)
         self.dropout = nn.Dropout(config.head_dropout) if config.head_dropout > 0 else nn.Identity()
 
     def forward(self, x):
         """
         x: [bs x nvars x num_patch x d_model]
             or [bs x nvars x (num_patch+1) x d_model] if use cls_token
-        output: [bs x pred_len x target_dimension]
+        output: [bs x pred_len x num_output_channels]
         """
         batch_size = x.shape[0]
         if self.use_cls_token:
@@ -1176,10 +1184,10 @@ class PredictionHead(nn.Module):
 
         # flatten the input
         x = self.flatten(x)  # x: bs x (nvars * d_model)
-        y = self.linear(self.dropout(x))  # y: bs x (pred_len * target_dimension)
+        y = self.linear(self.dropout(x))  # y: bs x (pred_len * num_output_channels)
 
         # reshape the data
-        y = y.reshape(batch_size, -1, self.target_dimension)  # [bs x pred_len x target_dimension]
+        y = y.reshape(batch_size, -1, self.num_output_channels)  # [bs x pred_len x num_output_channels]
         return y
 
 
@@ -1252,7 +1260,7 @@ class ForecastHead(nn.Module):
         super().__init__()
 
         self.individual = config.individual
-        self.n_vars = config.input_size
+        self.num_input_channels = config.num_input_channels
         self.use_cls_token = config.use_cls_token
         self.pooling = config.pooling
         head_dim = config.d_model if self.pooling else config.d_model * config.num_patches
@@ -1261,7 +1269,7 @@ class ForecastHead(nn.Module):
             self.linears = nn.ModuleList()
             self.dropouts = nn.ModuleList()
             self.flattens = nn.ModuleList()
-            for i in range(self.n_vars):
+            for i in range(self.num_input_channels):
                 self.flattens.append(nn.Flatten(start_dim=2))
                 self.linears.append(nn.Linear(head_dim, config.prediction_length))
                 self.dropouts.append(nn.Dropout(config.head_dropout) if config.head_dropout > 0 else nn.Identity())
@@ -1289,7 +1297,7 @@ class ForecastHead(nn.Module):
 
         if self.individual:
             x_out = []
-            for i in range(self.n_vars):
+            for i in range(self.num_input_channels):
                 z = self.flattens[i](y[:, i, :])  # y: [bs x (d_model * num_patches)] or [bs x d_model)]
                 z = self.linears[i](z)  # z: [bs x forecast_len]
                 z = self.dropouts[i](z)
@@ -1358,9 +1366,9 @@ class RegressionHead(nn.Module):
 
         self.flatten = nn.Flatten(start_dim=1)
         self.dropout = nn.Dropout(config.head_dropout) if config.head_dropout > 0 else nn.Identity()
-        input_dim = config.input_size * config.d_model
-        # if is_flatten: input_dim *= num_patch
-        self.linear = nn.Linear(input_dim, config.target_dimension)
+        head_dim = config.num_input_channels * config.d_model
+        # if is_flatten: head_dim *= num_patch
+        self.linear = nn.Linear(head_dim, config.num_output_channels)
 
     def forward(self, past_values):
         """

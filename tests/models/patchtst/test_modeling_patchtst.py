@@ -59,7 +59,7 @@ class PatchTSTModelTester:
         context_length=14,
         patch_length=5,
         stride=5,
-        input_size=1,
+        num_input_channels=1,
         num_time_features=1,
         is_training=True,
         hidden_size=16,
@@ -74,7 +74,7 @@ class PatchTSTModelTester:
         distil=False,
         seed_number=42,
         num_classes=2,
-        target_dimension=2,
+        num_output_channels=2,
     ):
         self.parent = parent
         self.batch_size = batch_size
@@ -82,7 +82,7 @@ class PatchTSTModelTester:
         self.context_length = context_length
         self.patch_length = patch_length
         self.stride = stride
-        self.input_size = input_size
+        self.num_input_channels = num_input_channels
         self.num_time_features = num_time_features
         self.lags_sequence = lags_sequence
         self.is_training = is_training
@@ -99,7 +99,7 @@ class PatchTSTModelTester:
         )
         self.seed_number = seed_number
         self.num_classes = num_classes
-        self.target_dimension = target_dimension
+        self.num_output_channels = num_output_channels
         self.sampling_factor = sampling_factor
         self.distil = distil
         self.num_patches = (max(self.context_length, self.patch_length) - self.patch_length) // self.stride + 1
@@ -109,7 +109,7 @@ class PatchTSTModelTester:
             prediction_length=self.prediction_length,
             patch_length=self.patch_length,
             stride=self.stride,
-            input_size=self.input_size,
+            num_input_channels=self.num_input_channels,
             d_model=self.hidden_size,
             encoder_layers=self.num_hidden_layers,
             encoder_attention_heads=self.num_attention_heads,
@@ -120,17 +120,17 @@ class PatchTSTModelTester:
             activation_function=self.hidden_act,
             seed_number=self.seed_number,
             num_classes=self.num_classes,
-            target_dimension=self.target_dimension,
+            num_output_channels=self.num_output_channels,
         )
 
     def prepare_patchtst_inputs_dict(self, config):
         _past_length = config.context_length
-        # bs, n_vars, num_patch, patch_len
+        # bs, num_input_channels, num_patch, patch_len
 
-        # [bs x seq_len x n_vars]
-        past_values = floats_tensor([self.batch_size, _past_length, self.input_size])
+        # [bs x seq_len x num_input_channels]
+        past_values = floats_tensor([self.batch_size, _past_length, self.num_input_channels])
 
-        future_values = floats_tensor([self.batch_size, config.prediction_length, self.input_size])
+        future_values = floats_tensor([self.batch_size, config.prediction_length, self.num_input_channels])
 
         inputs_dict = {
             "past_values": past_values,
@@ -203,7 +203,7 @@ class PatchTSTModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase
             inputs_dict.pop("future_values")
         elif model_class in get_values(MODEL_FOR_TIME_SERIES_REGRESSION_MAPPING):
             rng = random.Random(self.model_tester.seed_number)
-            labels = floats_tensor([self.model_tester.batch_size, self.model_tester.target_dimension], rng=rng)
+            labels = floats_tensor([self.model_tester.batch_size, self.model_tester.num_output_channels], rng=rng)
             inputs_dict["labels"] = labels
             inputs_dict.pop("future_values")
         return inputs_dict
@@ -323,11 +323,11 @@ class PatchTSTModelIntegrationTests(unittest.TestCase):
         num_patch = (
             max(model.config.context_length, model.config.patch_length) - model.config.patch_length
         ) // model.config.stride + 1
-        expected_shape = torch.Size([64, model.config.input_size, num_patch, model.config.patch_length])
+        expected_shape = torch.Size([64, model.config.num_input_channels, num_patch, model.config.patch_length])
         self.assertEqual(output.shape, expected_shape)
 
         expected_slice = torch.tensor(
-            [[[0.0160]], [[0.0148]], [[0.0090]], [[0.0166]], [[0.0099]], [[0.0053]], [[0.0090]]], device=torch_device
+            [[[-0.0170]], [[0.0163]], [[0.0090]], [[0.0139]], [[0.0067]], [[0.0246]], [[0.0090]]], device=torch_device
         )
         self.assertTrue(torch.allclose(output[0, :7, :1, :1], expected_slice, atol=TOLERANCE))
 
@@ -349,8 +349,8 @@ class PatchTSTModelIntegrationTests(unittest.TestCase):
     #                                   )
     #     self.assertTrue(torch.allclose(output, expected_slice, atol=TOLERANCE))
 
-    def test_forecasting_head(self):
-        model = PatchTSTForForecasting.from_pretrained("./hf_etth_forecasting").to(torch_device)
+    def test_prediction_head(self):
+        model = PatchTSTForPrediction.from_pretrained("diepi/test_patchtst_prediction_etth1").to(torch_device)
         batch = prepare_batch(file="test-batch.pt")
 
         torch.manual_seed(0)
@@ -358,12 +358,12 @@ class PatchTSTModelIntegrationTests(unittest.TestCase):
             output = model(
                 past_values=batch["past_values"].to(torch_device),
                 future_values=batch["future_values"].to(torch_device),
-            ).forecast_outputs
-        expected_shape = torch.Size([64, model.config.prediction_length, model.config.input_size])
+            ).prediction_output
+        expected_shape = torch.Size([64, model.config.prediction_length, model.config.num_input_channels])
         self.assertEqual(output.shape, expected_shape)
 
         expected_slice = torch.tensor(
-            [[-0.9027, 0.3814, -0.8322, 0.4250, -0.7183, -0.0635, -0.8747]],
+            [[-0.8200, 0.3741, -0.7543, 0.3971, -0.6659, -0.0124, -0.8308]],
             device=torch_device,
         )
         self.assertTrue(torch.allclose(output[0, :1, :7], expected_slice, atol=TOLERANCE))
@@ -385,7 +385,7 @@ class PatchTSTModelIntegrationTests(unittest.TestCase):
     #     # mean_prediction = outputs.sequences.mean(dim=1)
     #     # self.assertTrue(torch.allclose(mean_prediction[0, -3:], expected_slice, rtol=1e-1))
     #
-    #     # expected_shape = torch.Size([64, model.config.prediction_length, model.config.input_size])
+    #     # expected_shape = torch.Size([64, model.config.prediction_length, model.config.num_input_channels])
     #     self.assertEqual(outputs.shape, expected_shape)
     #
     #     expected_slice = torch.tensor([[-0.8200, 0.3741, -0.7543, 0.3971, -0.6659, -0.0124, -0.8308]],
