@@ -89,26 +89,15 @@ def positional_encoding(pe, learn_pe, q_len, d_model):
         w_pos = torch.empty((q_len, d_model))  # pe = None and learn_pe = False can be used to measure impact of pe
         nn.init.uniform_(w_pos, -0.02, 0.02)
         learn_pe = False
-    elif pe == "zero":
-        w_pos = torch.empty((q_len, 1))
-        nn.init.uniform_(w_pos, -0.02, 0.02)
     elif pe == "zeros":
         w_pos = torch.empty((q_len, d_model))
         nn.init.uniform_(w_pos, -0.02, 0.02)
-    elif pe == "normal" or pe == "gauss":
+    elif pe == "normal":
         w_pos = torch.zeros((q_len, 1))
         torch.nn.init.normal_(w_pos, mean=0.0, std=0.1)
     elif pe == "uniform":
         w_pos = torch.zeros((q_len, 1))
         nn.init.uniform_(w_pos, a=0.0, b=0.1)
-    elif pe == "lin1d":
-        w_pos = coord1d_pos_encoding(q_len, exponential=False, normalize=True)
-    elif pe == "exp1d":
-        w_pos = coord1d_pos_encoding(q_len, exponential=True, normalize=True)
-    elif pe == "lin2d":
-        w_pos = coord2d_pos_encoding(q_len, d_model, exponential=False, normalize=True)
-    elif pe == "exp2d":
-        w_pos = coord2d_pos_encoding(q_len, d_model, exponential=True, normalize=True)
     elif pe == "sincos":
         pos_enc = torch.zeros(q_len, d_model)
         position = torch.arange(0, q_len).unsqueeze(1)
@@ -120,40 +109,9 @@ def positional_encoding(pe, learn_pe, q_len, d_model):
         w_pos = pos_enc
     else:
         raise ValueError(
-            f"{pe} is not a valid pe (positional encoder. Available types: 'gauss'=='normal', \
-        'zeros', 'zero', uniform', 'lin1d', 'exp1d', 'lin2d', 'exp2d', 'sincos', None.)"
-        )
+            f"{pe} is not a valid positional encoder. Available types are 'normal', 'zero', uniform', 'sincos', None."
+            )
     return nn.Parameter(w_pos, requires_grad=learn_pe)
-
-
-def coord2d_pos_encoding(q_len, d_model, exponential=False, normalize=True, eps=1e-3, verbose=False):
-    x = 0.5 if exponential else 1
-    i = 0
-    for i in range(100):
-        cpe = (
-            2 * (torch.linspace(0, 1, q_len).reshape(-1, 1) ** x) * (torch.linspace(0, 1, d_model).reshape(1, -1) ** x)
-            - 1
-        )
-
-        if abs(cpe.mean()) <= eps:
-            break
-        elif cpe.mean() > eps:
-            x += 0.001
-        else:
-            x -= 0.001
-        i += 1
-    if normalize:
-        cpe = cpe - cpe.mean()
-        cpe = cpe / (cpe.std() * 10)
-    return cpe
-
-
-def coord1d_pos_encoding(q_len, exponential=False, normalize=True):
-    cpe = 2 * (torch.linspace(0, 1, q_len).reshape(-1, 1) ** (0.5 if exponential else 1)) - 1
-    if normalize:
-        cpe = cpe - cpe.mean()
-        cpe = cpe / (cpe.std() * 10)
-    return cpe
 
 
 def set_seed(x=42):
