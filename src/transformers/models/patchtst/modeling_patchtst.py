@@ -402,6 +402,7 @@ class ChannelAttentionTSTEncoder(nn.Module):
 class ChannelAttentionTSTEncoderLayer(nn.Module):
     def __init__(self, config: PatchTSTConfig):
         super().__init__()
+        self.channel_attention = config.channel_attention
 
         # Multi-Head attention
         self.self_attn = PatchTSTAttention(config)
@@ -414,11 +415,12 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
             self.norm_sublayer1 = nn.LayerNorm(config.d_model)
 
         # Add & Norm of the sublayer 2
-        self.dropout_path2 = nn.Dropout(config.dropout_path) if config.dropout_path > 0 else nn.Identity()
-        if "batch" in config.norm.lower():
-            self.norm_sublayer2 = nn.Sequential(Transpose(1, 2), nn.BatchNorm1d(config.d_model), Transpose(1, 2))
-        else:
-            self.norm_sublayer2 = nn.LayerNorm(config.d_model)
+        if self.channel_attention:
+            self.dropout_path2 = nn.Dropout(config.dropout_path) if config.dropout_path > 0 else nn.Identity()
+            if "batch" in config.norm.lower():
+                self.norm_sublayer2 = nn.Sequential(Transpose(1, 2), nn.BatchNorm1d(config.d_model), Transpose(1, 2))
+            else:
+                self.norm_sublayer2 = nn.LayerNorm(config.d_model)
 
         # Position-wise Feed-Forward
         self.ff = nn.Sequential(
@@ -441,7 +443,6 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
     def forward(self, src: torch.Tensor):
         """
         src: tensor [bs x nvars x sequence_length x d_model]
-
         Return:
             Tensor [bs x nvars x sequence_length x d_model]
         """
@@ -457,7 +458,7 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
                 self.self_attn(self.norm_sublayer1(src))
             )  # Add: residual connection with residual dropout
         else:
-            ## Multi-Head attention and Add residual connection and Norm - Standard Transformer from BERT
+            ## Multi-Head attention and Add residual connection and Norm
             src = self.norm_sublayer1(
                 src + self.dropout_path1(self.self_attn(src))
             )  # src: [(bs*nvars) x sequence_length x d_model]
@@ -465,22 +466,23 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
 
         # second sublayer: attention across variable at any given time
         # [bs x nvars x sequence_length x d_model] -> [bs x sequence_length x nvars x d_model] -> [(bs*sequence_length) x nvars x d_model]
-        src = (
-            src.transpose(2, 1).contiguous().view(bs * sequence_length, num_input_channels, d_model)
-        )  # [(bs*sequence_length) x nvars x d_model]
-        if self.pre_norm:
-            ## Norm and Multi-Head attention and Add residual connection
-            src = src + self.dropout_path2(
-                self.self_attn(self.norm_sublayer2(src))
-            )  # Add: residual connection with residual dropout
-        else:
-            ## Multi-Head attention and Add residual connection and Norm - Standard Transformer from BERT
-            src = self.norm_sublayer2(
-                src + self.dropout_path2(self.self_attn(src))
-            )  # src: [(bs*sequence_length) x nvars x d_model]
-        src = (
-            src.reshape(bs, sequence_length, num_input_channels, d_model).transpose(1, 2).contiguous()
-        )  # src: [bs x nvars x sequence_length x d_model]
+        if self.channel_attention:
+            src = (
+                src.transpose(2, 1).contiguous().view(bs * sequence_length, num_input_channels, d_model)
+            )  # [(bs*sequence_length) x nvars x d_model]
+            if self.pre_norm:
+                ## Norm and Multi-Head attention and Add residual connection
+                src = src + self.dropout_path2(
+                    self.self_attn(self.norm_sublayer2(src))
+                )  # Add: residual connection with residual dropout
+            else:
+                ## Multi-Head attention and Add residual connection and Norm
+                src = self.norm_sublayer2(
+                    src + self.dropout_path2(self.self_attn(src))
+                )  # src: [(bs*sequence_length) x nvars x d_model]
+            src = (
+                src.reshape(bs, sequence_length, num_input_channels, d_model).transpose(1, 2).contiguous()
+            )  # src: [bs x nvars x sequence_length x d_model]
 
         # Third sublayer: mixing across hidden
         src = src.view(
@@ -497,7 +499,6 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
                 src + self.dropout_path3(self.ff(src))
             )  # Add: residual connection with residual dropout
         src = src.reshape(bs, num_input_channels, sequence_length, d_model)  # [bs x nvars x sequence_length x d_model]
-
         return src
 
 
