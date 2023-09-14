@@ -1,8 +1,8 @@
-from transformers import PatchTSTConfig, PatchTSTForForecasting
-from transformers import Trainer, TrainingArguments
-from torch.utils.data import Dataset
 import numpy as np
 import torch
+from torch.utils.data import Dataset
+
+from transformers import PatchTSTConfig, PatchTSTForForecasting, Trainer, TrainingArguments
 
 
 class TestDataset(Dataset):
@@ -26,8 +26,8 @@ class TestDataset(Dataset):
         if self.is_pred:
             seq_y = self.x[s_end:r_end]
         elif self.use_labels:
-            return {'past_values': seq_x, 'labels': seq_y}
-        return {'past_values': seq_x, 'future_values': seq_y}
+            return {"past_values": seq_x, "labels": seq_y}
+        return {"past_values": seq_x, "future_values": seq_y}
 
     def __len__(self):
         if self.is_pred:
@@ -36,7 +36,6 @@ class TestDataset(Dataset):
 
 
 if __name__ == "__main__":
-
     n_classes = 3
     bs = 400
     n_features = 20
@@ -63,22 +62,22 @@ if __name__ == "__main__":
         fc_dropout=0,
         r=0.4,
         prediction_length=pred_len,
-        pooling=None
+        pooling=None,
     )
 
     model = PatchTSTForForecasting(config)
 
     training_args = TrainingArguments(
-        output_dir='./save_model/',
+        output_dir="./save_model/",
         num_train_epochs=5,
         per_device_train_batch_size=50,
         per_device_eval_batch_size=50,
         remove_unused_columns=False,
         use_cpu=True,
-        evaluation_strategy='epoch',
-        save_strategy='epoch',
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
         load_best_model_at_end=True,
-        label_names=['future_values'],
+        label_names=["future_values"],
     )
 
     trainer = Trainer(

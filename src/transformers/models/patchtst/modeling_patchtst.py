@@ -110,7 +110,7 @@ def positional_encoding(pe, learn_pe, q_len, d_model):
     else:
         raise ValueError(
             f"{pe} is not a valid positional encoder. Available types are 'normal', 'zero', uniform', 'sincos', None."
-            )
+        )
     return nn.Parameter(w_pos, requires_grad=learn_pe)
 
 
@@ -651,7 +651,7 @@ PATCHTST_INPUTS_DOCSTRING = r"""
 
             For multivariate time series, the `num_input_channels` > 1 dimension is required and corresponds to the
             number of variates in the time series per time step.
-            
+
         future_values (`torch.FloatTensor` of shape `(batch_size, prediction_length)` or `(batch_size, prediction_length, num_input_channels)`, *optional*):
             Future values of the time series, that serve as labels for the model. The `future_values` is what the
             Transformer needs during training to learn to output, given the `past_values`.
@@ -664,7 +664,7 @@ PATCHTST_INPUTS_DOCSTRING = r"""
             number of variates in the time series per time step.
 
         output_hidden_states (`bool`, *optional*):
-            Whether or not to return the hidden states of all layers. 
+            Whether or not to return the hidden states of all layers.
 """
 
 

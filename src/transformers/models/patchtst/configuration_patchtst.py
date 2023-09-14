@@ -90,7 +90,7 @@ class PatchTSTConfig(PretrainedConfig):
         init_std (`float`, *optional*, defaults to 0.02):
             The standard deviation of the truncated normal weight initialization distribution.
         use_cache (`bool`, *optional*, defaults to `True`):
-            Whether to use the past key/values attentions (if applicable to the model) to speed up decoding.        
+            Whether to use the past key/values attentions (if applicable to the model) to speed up decoding.
         distil (`bool`, *optional*, defaults to `True`):
             Whether to use distilling in encoder.
 
@@ -170,7 +170,6 @@ class PatchTSTConfig(PretrainedConfig):
         num_output_channels: int = 1,
         **kwargs,
     ):
-
         # time series specific configuration
         self.context_length = context_length
         self.num_input_channels = num_input_channels  # n_vars
