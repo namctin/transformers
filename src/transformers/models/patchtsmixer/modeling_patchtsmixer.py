@@ -590,7 +590,7 @@ class PatchTSMixer(nn.Module):
             self.patcher = nn.Linear(num_input_channels * patch_len, num_features)
 
         elif mode in ["common_channel", "mix_channel"]:
-            self.patcher = nn.Linear(patch_len, num_features)
+            self.patcher = nn.Linear(patch_len*3, num_features*3)
 
         self.num_patches = num_patches
         self.patch_len = patch_len
@@ -637,10 +637,15 @@ class PatchTSMixer(nn.Module):
                 ),
             )  # input_ts: [bs x num_patch x patch_len * n_vars]
 
+        input_ts = input_ts.reshape(input_ts.shape[0],input_ts.shape[1],input_ts.shape[2]//3,input_ts.shape[3]*3)
+
         patches = self.patcher(
             input_ts
         )  # flatten: [bs x num_patch x num_features]   common_channel/mix_channel: [bs x n_vars x num_patch x num_features]
 
+        patches = patches.reshape(patches.shape[0],patches.shape[1],patches.shape[2]*3,patches.shape[3]//3)
+        
+        
         if self.use_positional_encoding:
             patches = patches + self.position_enc
 
@@ -1655,8 +1660,13 @@ class PatchTSMixerModel(PatchTSMixerPreTrainedModel):
         mask = None
         if observed_mask is None:
             observed_mask = torch.ones_like(past_values)
+        past_values = torch.reshape(past_values,(past_values.shape[0],past_values.shape[1]//3,past_values.shape[2]*3))
+        observed_mask = torch.reshape(observed_mask,(observed_mask.shape[0],observed_mask.shape[1]//3,observed_mask.shape[2]*3))
         scaled_past_values, loc, scale = self.scaler(past_values, observed_mask)
-
+        scaled_past_values = torch.reshape(scaled_past_values,(scaled_past_values.shape[0],scaled_past_values.shape[1]*3,scaled_past_values.shape[2]//3))
+        
+        observed_mask = torch.reshape(observed_mask,(observed_mask.shape[0],observed_mask.shape[1]*3,observed_mask.shape[2]//3))
+        
         patched_x = self.patching(
             scaled_past_values
         )  # [batch_size x num_input_channels x num_patch x patch_len
@@ -1961,8 +1971,7 @@ class PatchTSMixerForForecasting(PatchTSMixerPreTrainedModel):
         y_hat = self.head(
             model_output.last_hidden_state,
         )  # tensor [batch_size x forecast_len x num_input_channels]
-        y_hat = y_hat.reshape(y_hat.shape[0], y_hat.shape[1] // 3, 3, y_hat.shape[2])
-        y_hat = y_hat.sum(dim=2)
+        
         loss_val = None
         if self.config.forecast_channel_indices is not None:
             if self.distribution_output:
@@ -2002,7 +2011,11 @@ class PatchTSMixerForForecasting(PatchTSMixerPreTrainedModel):
                     loss_val = self.loss(distribution, target_values)
                     loss_val = weighted_average(loss_val)
             else:
+                y_hat = y_hat.reshape(y_hat.shape[0], y_hat.shape[1] // 3, y_hat.shape[2]*3)
                 y_hat = y_hat * model_output.scale + model_output.loc
+                y_hat = y_hat.reshape(y_hat.shape[0], y_hat.shape[1] * 3, y_hat.shape[2]//3)
+                y_hat = y_hat.reshape(y_hat.shape[0], y_hat.shape[1] // 3, 3, y_hat.shape[2])
+                y_hat = y_hat.sum(dim=2)
                 if target_values is not None and return_loss is True:
                     loss_val = self.loss(y_hat, target_values)
 
