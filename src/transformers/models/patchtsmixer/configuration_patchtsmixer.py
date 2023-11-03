@@ -199,6 +199,7 @@ class PatchTSMixerConfig(PretrainedConfig):
         distribution_output: str = "student_t",
         loss: str = "mse",
         num_parallel_samples: int = 100,
+        decompose_k: int = 3,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -255,5 +256,5 @@ class PatchTSMixerConfig(PretrainedConfig):
         self.distribution_output = distribution_output
         self.loss = loss
         self.num_parallel_samples = num_parallel_samples
-
+        self.decompose_k = decompose_k
         super().__init__(**kwargs)
