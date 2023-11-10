@@ -443,6 +443,7 @@ class ChannelAttentionTSTEncoderLayer(nn.Module):
     def forward(self, src: torch.Tensor):
         """
         src: tensor [bs x nvars x sequence_length x d_model]
+
         Return:
             Tensor [bs x nvars x sequence_length x d_model]
         """
