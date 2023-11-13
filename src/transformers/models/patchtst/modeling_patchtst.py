@@ -481,7 +481,10 @@ class PatchTSTMasking(nn.Module):
 
         """
 
-        if self.mask_type == "random":
+        if not self.training:
+            masked_input = patch_input
+            mask = torch.zeros(patch_input.shape[:-1], device=patch_input.device)
+        elif self.mask_type == "random":
             masked_input, mask = random_masking(
                 inputs=patch_input,
                 mask_ratio=self.random_mask_ratio,
