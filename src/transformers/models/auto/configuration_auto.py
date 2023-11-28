@@ -21,7 +21,10 @@ from collections import OrderedDict
 from typing import List, Union
 
 from ...configuration_utils import PretrainedConfig
-from ...dynamic_module_utils import get_class_from_dynamic_module, resolve_trust_remote_code
+from ...dynamic_module_utils import (
+    get_class_from_dynamic_module,
+    resolve_trust_remote_code,
+)
 from ...utils import CONFIG_NAME, logging
 
 
@@ -164,6 +167,7 @@ CONFIG_MAPPING_NAMES = OrderedDict(
         ("opt", "OPTConfig"),
         ("owlv2", "Owlv2Config"),
         ("owlvit", "OwlViTConfig"),
+        ("patchtsmixer", "PatchTSMixerConfig"),
         ("patchtst", "PatchTSTConfig"),
         ("pegasus", "PegasusConfig"),
         ("pegasus_x", "PegasusXConfig"),
@@ -258,7 +262,10 @@ CONFIG_ARCHIVE_MAP_MAPPING_NAMES = OrderedDict(
         ("albert", "ALBERT_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("align", "ALIGN_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("altclip", "ALTCLIP_PRETRAINED_CONFIG_ARCHIVE_MAP"),
-        ("audio-spectrogram-transformer", "AUDIO_SPECTROGRAM_TRANSFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP"),
+        (
+            "audio-spectrogram-transformer",
+            "AUDIO_SPECTROGRAM_TRANSFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP",
+        ),
         ("autoformer", "AUTOFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("bark", "BARK_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("bart", "BART_PRETRAINED_CONFIG_ARCHIVE_MAP"),
@@ -379,6 +386,7 @@ CONFIG_ARCHIVE_MAP_MAPPING_NAMES = OrderedDict(
         ("opt", "OPT_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("owlv2", "OWLV2_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("owlvit", "OWLVIT_PRETRAINED_CONFIG_ARCHIVE_MAP"),
+        ("patchtsmixer", "PATCHTSMIXER_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("patchtst", "PATCHTST_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("pegasus", "PEGASUS_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("pegasus_x", "PEGASUS_X_PRETRAINED_CONFIG_ARCHIVE_MAP"),
@@ -420,7 +428,10 @@ CONFIG_ARCHIVE_MAP_MAPPING_NAMES = OrderedDict(
         ("t5", "T5_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("table-transformer", "TABLE_TRANSFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("tapas", "TAPAS_PRETRAINED_CONFIG_ARCHIVE_MAP"),
-        ("time_series_transformer", "TIME_SERIES_TRANSFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP"),
+        (
+            "time_series_transformer",
+            "TIME_SERIES_TRANSFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP",
+        ),
         ("timesformer", "TIMESFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("transfo-xl", "TRANSFO_XL_PRETRAINED_CONFIG_ARCHIVE_MAP"),
         ("tvlt", "TVLT_PRETRAINED_CONFIG_ARCHIVE_MAP"),
@@ -613,6 +624,7 @@ MODEL_NAMES_MAPPING = OrderedDict(
         ("opt", "OPT"),
         ("owlv2", "OWLv2"),
         ("owlvit", "OWL-ViT"),
+        ("patchtsmixer", "PatchTSMixer"),
         ("patchtst", "PatchTST"),
         ("pegasus", "Pegasus"),
         ("pegasus_x", "PEGASUS-X"),
@@ -1064,13 +1076,19 @@ class AutoConfig:
         has_remote_code = "auto_map" in config_dict and "AutoConfig" in config_dict["auto_map"]
         has_local_code = "model_type" in config_dict and config_dict["model_type"] in CONFIG_MAPPING
         trust_remote_code = resolve_trust_remote_code(
-            trust_remote_code, pretrained_model_name_or_path, has_local_code, has_remote_code
+            trust_remote_code,
+            pretrained_model_name_or_path,
+            has_local_code,
+            has_remote_code,
         )
 
         if has_remote_code and trust_remote_code:
             class_ref = config_dict["auto_map"]["AutoConfig"]
             config_class = get_class_from_dynamic_module(
-                class_ref, pretrained_model_name_or_path, code_revision=code_revision, **kwargs
+                class_ref,
+                pretrained_model_name_or_path,
+                code_revision=code_revision,
+                **kwargs,
             )
             if os.path.isdir(pretrained_model_name_or_path):
                 config_class.register_for_auto_class()
