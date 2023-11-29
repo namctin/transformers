@@ -630,6 +630,9 @@ MODEL_FOR_TEXT_TO_WAVEFORM_MAPPING = None
 MODEL_FOR_TIME_SERIES_CLASSIFICATION_MAPPING = None
 
 
+MODEL_FOR_TIME_SERIES_PREDICTION_MAPPING = None
+
+
 MODEL_FOR_TIME_SERIES_REGRESSION_MAPPING = None
 
 
@@ -857,6 +860,13 @@ class AutoModelForTextToSpectrogram(metaclass=DummyObject):
 
 
 class AutoModelForTextToWaveform(metaclass=DummyObject):
+    _backends = ["torch"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["torch"])
+
+
+class AutoModelForTimeSeriesPrediction(metaclass=DummyObject):
     _backends = ["torch"]
 
     def __init__(self, *args, **kwargs):
